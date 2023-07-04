@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/app_nav"
+    app:startDestination="@id/mainFragment">
+
+    <fragment
+        android:id="@+id/mainFragment"
+        android:name="com.photo.filter.main.ui.MainFragment"
+        android:label="MainFragment">
+        <action
+            android:id="@+id/action_mainFragment_to_cameraFragment"
+            app:destination="@id/cameraFragment" />
+        <action
+            android:id="@+id/action_mainFragment_to_detailFragment"
+            app:destination="@id/detailFragment" />
+    </fragment>
+    <fragment
+        android:id="@+id/cameraFragment"
+        android:name="com.photo.filter.camera.CameraFragment"
+        android:label="CameraFragment">
+        <action
+            android:id="@+id/action_cameraFragment_to_detailFragment"
+            app:destination="@id/detailFragment" />
+    </fragment>
+    <fragment
+        android:id="@+id/detailFragment"
+        android:name="com.photo.filter.detail.ui.DetailFragment"
+        android:label="DetailFragment">
+        <argument
+            android:name="uri"
+            app:argType="string" />
+
+        <argument
+            android:name="isFromInternet"
+            app:argType="boolean" />
+    </fragment>
+
+</navigation>
