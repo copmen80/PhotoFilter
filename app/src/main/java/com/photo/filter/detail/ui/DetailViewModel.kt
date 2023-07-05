@@ -1,7 +1,11 @@
 package com.photo.filter.detail.ui
 
 import android.app.Application
+import android.content.ContentValues
+import android.content.Context
 import android.graphics.Bitmap
+import android.net.Uri
+import android.provider.MediaStore
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -40,6 +44,29 @@ class DetailViewModel @Inject constructor(
             saveFilteredImageUseCase(filteredBitmap)
             eventChannel.send(DetailEvent.SaveFilteredImage)
         }
+    }
+
+    fun getImageUri(inContext: Context, inImage: Bitmap): Uri? {
+        val contentValues = ContentValues()
+        contentValues.put(MediaStore.Images.Media.DISPLAY_NAME, "Title")
+        contentValues.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+
+        val contentResolver = inContext.contentResolver
+        val uri =
+            contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+
+        try {
+            uri?.let {
+                val outputStream = contentResolver.openOutputStream(it)
+                outputStream?.use { stream ->
+                    inImage.compress(Bitmap.CompressFormat.JPEG, 100, stream)
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        return uri
     }
 
     fun initSource(args: DetailScreenArgs) {

@@ -1,13 +1,9 @@
 package com.photo.filter.detail.ui
 
-import android.content.ContentValues
-import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
-import android.net.Uri
 import android.os.Bundle
-import android.provider.MediaStore
 import android.view.*
 import android.widget.Toast
 import androidx.core.graphics.drawable.toBitmap
@@ -80,7 +76,7 @@ class DetailFragment : Fragment() {
                         with(Intent(Intent.ACTION_SEND)) {
                             putExtra(
                                 Intent.EXTRA_STREAM,
-                                getImageUri(requireContext(), binding.ivDetail.drawable.toBitmap())
+                                viewModel.getImageUri(requireContext(), binding.ivDetail.drawable.toBitmap())
                             )
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             type = "image/*"
@@ -95,54 +91,13 @@ class DetailFragment : Fragment() {
 
     }
 
-    fun getImageUri(inContext: Context, inImage: Bitmap): Uri? {
-        val contentValues = ContentValues()
-        contentValues.put(MediaStore.Images.Media.DISPLAY_NAME, "Title")
-        contentValues.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-
-        val contentResolver = inContext.contentResolver
-        val uri =
-            contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-
-        try {
-            uri?.let {
-                val outputStream = contentResolver.openOutputStream(it)
-                outputStream?.use { stream ->
-                    inImage.compress(Bitmap.CompressFormat.JPEG, 100, stream)
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-
-        return uri
-    }
-
     private fun handleEvents() {
         lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.eventsFlow.collect { event ->
                     when (event) {
                         is DetailEvent.PhotoReceived -> {
-                            Glide.with(this@DetailFragment)
-                                .load(event.photoUiModel.url)
-                                .into(object : CustomTarget<Drawable>() {
-                                    override fun onResourceReady(
-                                        resource: Drawable,
-                                        transition: Transition<in Drawable>?
-                                    ) {
-                                        val bitmap = resource.toBitmap()
-                                        filteredBitmap.value = bitmap
-
-                                        gpuImage.setImage(bitmap)
-
-                                        binding.ivDetail.setImageDrawable(resource)
-                                        viewModel.loadImageFilters(bitmap)
-                                    }
-
-                                    override fun onLoadCleared(placeholder: Drawable?) {
-                                    }
-                                })
+                            setupImage(event.photoUiModel.url)
                         }
                         is DetailEvent.FiltersReceived -> initFiltersAdapter(event.filter)
                         DetailEvent.HideLoading -> hideLoading()
@@ -154,6 +109,28 @@ class DetailFragment : Fragment() {
                 }
             }
         }
+    }
+
+    private fun setupImage(url: String) {
+        Glide.with(this@DetailFragment)
+            .load(url)
+            .into(object : CustomTarget<Drawable>() {
+                override fun onResourceReady(
+                    resource: Drawable,
+                    transition: Transition<in Drawable>?
+                ) {
+                    val bitmap = resource.toBitmap()
+                    filteredBitmap.value = bitmap
+
+                    gpuImage.setImage(bitmap)
+
+                    binding.ivDetail.setImageDrawable(resource)
+                    viewModel.loadImageFilters(bitmap)
+                }
+
+                override fun onLoadCleared(placeholder: Drawable?) {
+                }
+            })
     }
 
     private fun showLoading() {
