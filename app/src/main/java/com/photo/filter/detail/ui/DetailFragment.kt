@@ -1,45 +1,48 @@
 package com.photo.filter.detail.ui
 
+import android.content.ContentValues
+import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
+import android.net.Uri
 import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
+import android.provider.MediaStore
+import android.view.*
+import android.widget.Toast
 import androidx.core.graphics.drawable.toBitmap
+import androidx.core.view.MenuHost
+import androidx.core.view.MenuProvider
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.transition.Transition
+import com.photo.filter.R
 import com.photo.filter.databinding.FragmentDetailBinding
 import com.photo.filter.detail.data.local.model.ImageFilterModel
 import com.photo.filter.detail.ui.adapter.FilterAdapter
-import com.photo.filter.utills.listener.ImageFilterListener
 import dagger.hilt.android.AndroidEntryPoint
 import jp.co.cyberagent.android.gpuimage.GPUImage
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
+
 @AndroidEntryPoint
-class DetailFragment : Fragment(), ImageFilterListener {
+class DetailFragment : Fragment() {
     private var _binding: FragmentDetailBinding? = null
     private val binding get() = _binding!!
 
     private val viewModel by viewModels<DetailViewModel>()
 
-    private val uri: String by lazy { requireNotNull(arguments?.getString(URI_KEY)) }
-    private val isFromInternet: Boolean by lazy { requireNotNull(arguments?.getBoolean(INTERNET_KEY)) }
+    private val gpuImage: GPUImage by lazy { GPUImage(requireContext()) }
 
-    private lateinit var gpuImage: GPUImage
-
-    private lateinit var originalBitmap: Bitmap
-    private val filteredBitmap = MutableStateFlow(originalBitmap)
+    private val filteredBitmap = MutableStateFlow<Bitmap?>(null)
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -52,33 +55,67 @@ class DetailFragment : Fragment(), ImageFilterListener {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         handleEvents()
+        initToolbar()
+        viewModel.initSource(requireNotNull(arguments?.getParcelable(ARGS_KEY)))
+    }
 
-        if (!isFromInternet) {
+    private fun initToolbar() {
+        val menuHost: MenuHost = requireActivity()
 
-            Glide.with(this@DetailFragment)
-                .load(uri)
-                .into(object : CustomTarget<Drawable>() {
-                    override fun onResourceReady(
-                        resource: Drawable,
-                        transition: Transition<in Drawable>?
-                    ) {
-                        binding.ivDetail.setImageDrawable(resource)
-                        viewModel.loadImageFilters(resource.toBitmap())
+        menuHost.addMenuProvider(object : MenuProvider {
+            override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
+                menuInflater.inflate(R.menu.detail_menu, menu)
+            }
+
+            override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
+                return when (menuItem.itemId) {
+                    R.id.bSave -> {
+                        filteredBitmap.value?.let {
+                            viewModel.saveFilteredImage(it)
+                        }
+                        Toast.makeText(requireContext(), "Image Saved", Toast.LENGTH_SHORT).show()
+                        true
                     }
-
-                    override fun onLoadCleared(placeholder: Drawable?) {
-
+                    R.id.bShare -> {
+                        with(Intent(Intent.ACTION_SEND)) {
+                            putExtra(
+                                Intent.EXTRA_STREAM,
+                                getImageUri(requireContext(), binding.ivDetail.drawable.toBitmap())
+                            )
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            type = "image/*"
+                            startActivity(this)
+                        }
+                        true
                     }
-                })
-            /* Glide
-                 .with(this@DetailFragment)
-                 .load(uri.toUri())
-                 .into(binding.ivDetail)
-             viewModel.loadImageFilters(binding.ivDetail.drawable.toBitmap())*/
-        } else {
-            viewModel.getPhotoFromInternet()
+                    else -> false
+                }
+            }
+        }, viewLifecycleOwner, Lifecycle.State.RESUMED)
+
+    }
+
+    fun getImageUri(inContext: Context, inImage: Bitmap): Uri? {
+        val contentValues = ContentValues()
+        contentValues.put(MediaStore.Images.Media.DISPLAY_NAME, "Title")
+        contentValues.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+
+        val contentResolver = inContext.contentResolver
+        val uri =
+            contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+
+        try {
+            uri?.let {
+                val outputStream = contentResolver.openOutputStream(it)
+                outputStream?.use { stream ->
+                    inImage.compress(Bitmap.CompressFormat.JPEG, 100, stream)
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
 
+        return uri
     }
 
     private fun handleEvents() {
@@ -95,7 +132,6 @@ class DetailFragment : Fragment(), ImageFilterListener {
                                         transition: Transition<in Drawable>?
                                     ) {
                                         val bitmap = resource.toBitmap()
-                                        originalBitmap = bitmap
                                         filteredBitmap.value = bitmap
 
                                         gpuImage.setImage(bitmap)
@@ -103,24 +139,16 @@ class DetailFragment : Fragment(), ImageFilterListener {
                                         binding.ivDetail.setImageDrawable(resource)
                                         viewModel.loadImageFilters(bitmap)
                                     }
-                                    override fun onLoadCleared(placeholder: Drawable?) {
 
+                                    override fun onLoadCleared(placeholder: Drawable?) {
                                     }
                                 })
                         }
-                        is DetailEvent.FiltersReceived -> {
-                            FilterAdapter(this@DetailFragment, event.filter).also { adapter ->
-                                binding.rvFilters.layoutManager =
-                                    LinearLayoutManager(
-                                        context,
-                                        LinearLayoutManager.HORIZONTAL,
-                                        false
-                                    )
-                                binding.rvFilters.adapter = adapter
-                            }
-                            filteredBitmap.collect { bitmap ->
-                                binding.ivDetail.setImageBitmap(bitmap)
-                            }
+                        is DetailEvent.FiltersReceived -> initFiltersAdapter(event.filter)
+                        DetailEvent.HideLoading -> hideLoading()
+                        DetailEvent.ShowLoading -> showLoading()
+                        is DetailEvent.SaveFilteredImage -> {
+                            navigateToMainFragment()
                         }
                     }
                 }
@@ -128,7 +156,27 @@ class DetailFragment : Fragment(), ImageFilterListener {
         }
     }
 
-    override fun onFilterSelected(imageFilterModel: ImageFilterModel) {
+    private fun showLoading() {
+        binding.ivDetail.visibility = View.GONE
+        binding.pbImageLoading.visibility = View.VISIBLE
+    }
+
+    private fun hideLoading() {
+        binding.ivDetail.visibility = View.VISIBLE
+        binding.pbImageLoading.visibility = View.GONE
+    }
+
+    private suspend fun initFiltersAdapter(filters: List<ImageFilterModel>) {
+        binding.rvFilters.layoutManager =
+            LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
+        binding.rvFilters.adapter = FilterAdapter(filters, ::onFilterSelected)
+
+        filteredBitmap.collect { bitmap ->
+            binding.ivDetail.setImageBitmap(bitmap)
+        }
+    }
+
+    private fun onFilterSelected(imageFilterModel: ImageFilterModel) {
         with(imageFilterModel) {
             with(gpuImage) {
                 setFilter(filter)
@@ -137,8 +185,11 @@ class DetailFragment : Fragment(), ImageFilterListener {
         }
     }
 
+    private fun navigateToMainFragment() {
+        findNavController().navigate(DetailFragmentDirections.actionDetailFragmentToMainFragment())
+    }
+
     companion object {
-        private const val URI_KEY = "uri"
-        private const val INTERNET_KEY = "isFromInternet"
+        private const val ARGS_KEY = "args"
     }
 }

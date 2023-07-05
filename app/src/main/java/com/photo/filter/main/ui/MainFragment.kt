@@ -4,11 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.BitmapFactory
-import android.net.Uri
-import android.os.Build
 import android.os.Bundle
-import android.os.Environment
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -17,11 +13,10 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.viewModels
 import androidx.navigation.fragment.findNavController
 import com.photo.filter.databinding.FragmentMainBinding
+import com.photo.filter.detail.ui.model.DetailScreenArgs
 import dagger.hilt.android.AndroidEntryPoint
-import java.io.File
 
 @AndroidEntryPoint
 class MainFragment : Fragment() {
@@ -47,8 +42,9 @@ class MainFragment : Fragment() {
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == Activity.RESULT_OK) {
                 val data: Intent? = result.data
-
-                navigateToDetailFragment(data?.data.toString(), false)
+                navigateToDetailFragment(
+                    DetailScreenArgs.LocalSource(data?.data.toString())
+                )
             }
         }
 
@@ -83,7 +79,7 @@ class MainFragment : Fragment() {
             chooseImageGallery()
         }
         binding.bPhotoInternet.setOnClickListener {
-            navigateToDetailFragment("", true)
+            navigateToDetailFragment(DetailScreenArgs.NetworkSource)
         }
     }
 
@@ -94,10 +90,10 @@ class MainFragment : Fragment() {
     }
 
 
-    private fun navigateToDetailFragment(uri: String, isFromInternet: Boolean) {
-        Log.d("NavigationCustomTag","Main")
+    private fun navigateToDetailFragment(args: DetailScreenArgs) {
+        Log.d("NavigationCustomTag", "Main")
         findNavController().navigate(
-            MainFragmentDirections.actionMainFragmentToDetailFragment(uri, isFromInternet)
+            MainFragmentDirections.actionMainFragmentToDetailFragment(args)
         )
     }
 

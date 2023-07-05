@@ -12,12 +12,14 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
+import javax.inject.Qualifier
 import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
 
+    @BaseUrl
     @Provides
     fun providesBaseUrl(): String = "https://api.unsplash.com/"
 
@@ -36,10 +38,13 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideRetrofit(okHttpClient: OkHttpClient, BASE_URL: String): Retrofit = Retrofit.Builder()
+    fun provideRetrofit(
+        okHttpClient: OkHttpClient,
+        @BaseUrl baseUrl: String
+    ): Retrofit = Retrofit.Builder()
         .client(okHttpClient)
         .addConverterFactory(GsonConverterFactory.create())
-        .baseUrl(BASE_URL)
+        .baseUrl(baseUrl)
         .build()
 
     @Provides
@@ -48,3 +53,7 @@ object AppModule {
         retrofit.create(PhotoService::class.java)
 
 }
+
+@Retention(AnnotationRetention.BINARY)
+@Qualifier
+annotation class BaseUrl

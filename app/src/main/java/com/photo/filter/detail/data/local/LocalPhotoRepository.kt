@@ -1,7 +1,12 @@
 package com.photo.filter.detail.data.local
 
+import android.content.ContentResolver
+import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import com.photo.filter.detail.data.local.model.ImageFilterModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import jp.co.cyberagent.android.gpuimage.GPUImage
@@ -9,11 +14,17 @@ import jp.co.cyberagent.android.gpuimage.filter.GPUImageColorMatrixFilter
 import jp.co.cyberagent.android.gpuimage.filter.GPUImageFilter
 import jp.co.cyberagent.android.gpuimage.filter.GPUImageSaturationFilter
 import jp.co.cyberagent.android.gpuimage.filter.GPUImageSepiaToneFilter
+import java.io.File
+import java.io.FileOutputStream
+import java.io.OutputStream
+import java.util.*
 import javax.inject.Inject
+import kotlin.collections.ArrayList
 
-class FilterRepository @Inject constructor(@ApplicationContext private val context: Context) {
 
-    suspend fun getImageFilters(image: Bitmap): List<ImageFilterModel> {
+class LocalPhotoRepository @Inject constructor(@ApplicationContext private val context: Context) {
+
+    fun getImageFilters(image: Bitmap): List<ImageFilterModel> {
         val gpuImage = GPUImage(context).apply {
             setImage(image)
         }
@@ -200,5 +211,27 @@ class FilterRepository @Inject constructor(@ApplicationContext private val conte
         //endregion
 
         return imageFilters
+    }
+
+     fun saveFilteredImage(bitmap: Bitmap) {
+        val fileName = "IMG ${System.currentTimeMillis()}.jpg"
+        val fos: OutputStream? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val resolver: ContentResolver = context.contentResolver
+            val contentValues = ContentValues()
+            contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+            contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "image/jpg")
+            contentValues.put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/PhotoFilter-Image")
+            val imageUri =
+                resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+            resolver.openOutputStream(Objects.requireNonNull(imageUri!!))
+        } else {
+            val imagesDir =
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+                    .toString()
+            val image = File(imagesDir, fileName)
+            FileOutputStream(image)
+        }
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 100, fos)
+         Objects.requireNonNull(fos)?.close()
     }
 }

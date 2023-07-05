@@ -28,12 +28,11 @@
         android:name="com.photo.filter.detail.ui.DetailFragment"
         android:label="DetailFragment">
         <argument
-            android:name="uri"
-            app:argType="string" />
-
-        <argument
-            android:name="isFromInternet"
-            app:argType="boolean" />
+            android:name="args"
+            app:argType="com.photo.filter.detail.ui.model.DetailScreenArgs" />
+        <action
+            android:id="@+id/action_detailFragment_to_mainFragment"
+            app:destination="@id/mainFragment" />
     </fragment>
 
 </navigation>

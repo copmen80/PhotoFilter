@@ -12,19 +12,14 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.findNavController
 import com.photo.filter.R
 import com.photo.filter.databinding.FragmentCameraBinding
+import com.photo.filter.detail.ui.model.DetailScreenArgs
 import dagger.hilt.android.AndroidEntryPoint
-import java.text.SimpleDateFormat
-import java.util.*
 import java.util.concurrent.ExecutionException
-import kotlin.math.abs
-import kotlin.math.max
-import kotlin.math.min
 
 
 @AndroidEntryPoint
@@ -34,7 +29,6 @@ class CameraFragment : Fragment() {
 
     private var cameraFacing = CameraSelector.LENS_FACING_BACK
 
-    lateinit var cameraView: PreviewView
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -47,7 +41,6 @@ class CameraFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         initListeners()
-        cameraView = binding.pvCamera
         startCamera(cameraFacing)
     }
 
@@ -63,20 +56,17 @@ class CameraFragment : Fragment() {
     }
 
     private fun startCamera(cameraFacing: Int) {
-//        val aspectRatio = aspectRatio(cameraView.width, cameraView.height)
-
         val cameraProviderFuture = ProcessCameraProvider.getInstance(requireContext())
 
         cameraProviderFuture.addListener({
 
             val cameraProvider = cameraProviderFuture.get() as ProcessCameraProvider
 
-            val preview = Preview.Builder()/*.setTargetAspectRatio(aspectRatio)*/.build().also {
-                it.setSurfaceProvider(cameraView.surfaceProvider)
+            val preview = Preview.Builder().build().also {
+                it.setSurfaceProvider(binding.pvCamera.surfaceProvider)
             }
 
             try {
-
                 val imageCapture =
                     ImageCapture.Builder()
                         .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
@@ -108,14 +98,13 @@ class CameraFragment : Fragment() {
 
     private fun takePicture(imageCapture: ImageCapture) {
 
-        val name = SimpleDateFormat(FILENAME_FORMAT, Locale.US)
-            .format(System.currentTimeMillis())
+        val name = "IMG ${System.currentTimeMillis()}.jpg"
 
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
-            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpg")
             if (Build.VERSION.SDK_INT > Build.VERSION_CODES.P) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CameraX-Image")
+                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/PhotoFilter-Image")
             }
         }
 
@@ -138,11 +127,8 @@ class CameraFragment : Fragment() {
 
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
                     val msg = "Photo capture succeeded: ${output.savedUri}"
-                    requireActivity().runOnUiThread {
-                        Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
-                    }
                     Log.d(TAG, msg)
-                    navigateToCameraFragment(output.savedUri.toString())
+                    navigateToCameraFragment(DetailScreenArgs.LocalSource(output.savedUri.toString()))
                 }
             }
         )
@@ -165,24 +151,10 @@ class CameraFragment : Fragment() {
         }
     }
 
-    private fun aspectRatio(width: Int, height: Int): Int {
-        val previewRatio = max(width, height) / min(width, height).toDouble()
-        if (abs(previewRatio - 4.0 / 3.0) <= abs(previewRatio - 16.0 / 9.0)) {
-            return AspectRatio.RATIO_4_3
-        }
-        return AspectRatio.RATIO_16_9
-    }
-
-    private fun navigateToCameraFragment(uri: String) {
-        Log.d("NavigationCustomTag","Camera")
+    private fun navigateToCameraFragment(args: DetailScreenArgs) {
+        Log.d("NavigationCustomTag", "Camera")
         findNavController().navigate(
-            CameraFragmentDirections.actionCameraFragmentToDetailFragment(
-                uri, false
-            )
+            CameraFragmentDirections.actionCameraFragmentToDetailFragment(args)
         )
-    }
-
-    companion object {
-        const val FILENAME_FORMAT = "y-M-d H:m:s.S"
     }
 }
